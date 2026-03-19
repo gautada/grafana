@@ -1,83 +1,65 @@
-# ------------------------------------------------------------- [STAGE] INIT
-ARG ALPINE_TAG=0.0.0
+# syntax=docker/dockerfile:1.7
 
-FROM alpine:$ALPINE_TAG as config-alpine
+ARG BASE_IMAGE=docker.io/gautada/debian:latest
+FROM ${BASE_IMAGE} AS container
 
-RUN apk add --no-cache tzdata
+ARG IMAGE_NAME=grafana
 
-RUN cp -v /usr/share/zoneinfo/America/New_York /etc/localtime
-RUN echo "America/New_York" > /etc/timezone
+# ╭――――――――――――――――――――╮
+# │ METADATA           │
+# ╰――――――――――――――――――――╯
+LABEL org.opencontainers.image.title="${IMAGE_NAME}"
+LABEL org.opencontainers.image.description="A Grafana dashboard server container."
+LABEL org.opencontainers.image.source="https://github.com/gautada/grafana"
+LABEL org.opencontainers.image.license="Apache-2.0"
 
-# ------------------------------------------------------------- [STAGE] BUILD
-FROM alpine:$ALPINE_TAG as config-grafana
+# ╭――――――――――――――――――――╮
+# │ PACKAGES           │
+# ╰――――――――――――――――――――╯
+# Install Grafana from the official APT repository.
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends \
+    gnupg2 \
+    software-properties-common \
+ && curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor | tee /etc/apt/keyrings/grafana.gpg > /dev/null \
+ && echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | tee /etc/apt/sources.list.d/grafana.list \
+ && apt-get update \
+ && apt-get install --yes --no-install-recommends grafana \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-ARG BRANCH=v0.0.0
-
-RUN apk add --no-cache build-base git go yarn
-RUN git config --global advice.detachedHead false
-
-RUN mkdir /usr/lib/go/src/github.com
-WORKDIR /usr/lib/go/src/github.com
-RUN git clone --branch $BRANCH --depth 1 https://github.com/grafana/grafana.git
-WORKDIR /usr/lib/go/src/github.com/grafana
-
-
-# https://yarnpkg.com/en/docs/cli/
-# Possible fix from https://github.com/yarnpkg/yarn/issues/8242
-RUN yarn config set network-timeout 300000
-
-RUN yarn install --verbose --pure-lockfile --har --no-progress
-ENV NODE_ENV production
-RUN yarn build
-
-RUN go mod verify
-RUN go run build.go build
-
-# ----------------------------------------------------------- [STAGE] FINAL
-FROM alpine:$ALPINE_TAG
-
-COPY --from=config-alpine /etc/localtime /etc/localtime
-COPY --from=config-alpine /etc/timezone  /etc/timezone
-
-EXPOSE 3000
-
-COPY config.ini /etc/grafana/config.ini
-
-RUN apk add --no-cache ca-certificates openssl musl-utils
-
-RUN mkdir -p /var/log/grafana \
-             /opt/grafana-data
-
-RUN chmod 777 /opt/grafana-data
-
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/bin/*/grafana-server /usr/lib/go/src/github.com/grafana/bin/*/grafana-cli /usr/bin
-
+# ╭――――――――――――――――――――╮
+# │ USER               │
+# ╰――――――――――――――――――――╯
+# Use the official grafana user created by the package.
 ARG USER=grafana
-RUN addgroup $USER \
- && adduser -D -s /bin/sh -G $USER $USER \
- && echo "$USER:$USER" | chpasswd
-             
-RUN chown $USER:$USER -R /var/log/grafana
+RUN /usr/sbin/usermod -d /home/$USER -m $USER \
+ && /bin/echo "$USER:$USER" | /usr/sbin/chpasswd \
+ && chown -R $USER:$USER /etc/grafana /var/lib/grafana /var/log/grafana
 
-USER $USER
+# ╭――――――――――――――――――――╮
+# │ CONFIGURATION      │
+# ╰――――――――――――――――――――╯
+COPY config.ini /etc/grafana/grafana.ini
+RUN chown $USER:$USER /etc/grafana/grafana.ini
 
+# ╭――――――――――――――――――――╮
+# │ VERSION            │
+# ╰――――――――――――――――――――╯
+COPY scripts/container-version.sh /usr/bin/container-version
+RUN chmod +x /usr/bin/container-version
+
+# ╭――――――――――――――――――――╮
+# │ HEALTH             │
+# ╰――――――――――――――――――――╯
+COPY health/grafana-check.sh /etc/container/health.d/grafana-running
+RUN chmod +x /etc/container/health.d/grafana-running
+
+# ╭――――――――――――――――――――╮
+# │ ENTRYPOINT         │
+# ╰――――――――――――――――――――╯
+COPY services/grafana/run /etc/services.d/grafana/run
+RUN chmod +x /etc/services.d/grafana/run
+
+EXPOSE 3000/tcp
 WORKDIR /home/grafana
-
-RUN ln -s /opt/grafana-data /home/grafana/lib
-
-RUN mkdir -p /home/grafana/lib/provisioning/datasources \
-             /home/grafana/lib/provisioning/plugins \
-             /home/grafana/lib/provisioning/notifiers \
-             /home/grafana/lib/provisioning/dashboards \
-             /home/grafana/lib/plugins
-             
-
-
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/conf ./conf
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/public ./public
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/tools ./tools
-
-
-ENTRYPOINT ["/usr/bin/grafana-server"]
-CMD ["--config=/etc/grafana/config.ini", "--homepath=/home/grafana", "--packaging=container", "'$@'", "cfg:default.log.mode=console", "cfg:default.paths.data=/var/lib/grafana", "cfg:default.paths.logs=/var/log/grafana", "cfg:default.paths.plugins=/home/grafana/lib/plugins", "cfg:default.paths.provisioning=/home/grafana/lib/provisioning"]
-
