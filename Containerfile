@@ -1,83 +1,119 @@
-# ------------------------------------------------------------- [STAGE] INIT
-ARG ALPINE_TAG=0.0.0
+# syntax=docker/dockerfile:1.7
 
-FROM alpine:$ALPINE_TAG as config-alpine
+ARG BASE_IMAGE=docker.io/gautada/debian:latest
+ARG GRAFANA_VERSION=11.2.0
+ARG TARGETARCH=amd64
 
-RUN apk add --no-cache tzdata
+# ══════════════════════════════════════════════════════════════
+# Stage 1: Build Grafana from source
+# ══════════════════════════════════════════════════════════════
+FROM ${BASE_IMAGE} AS builder
 
-RUN cp -v /usr/share/zoneinfo/America/New_York /etc/localtime
-RUN echo "America/New_York" > /etc/timezone
+ARG GRAFANA_VERSION
+ARG TARGETARCH
 
-# ------------------------------------------------------------- [STAGE] BUILD
-FROM alpine:$ALPINE_TAG as config-grafana
+ENV DEBIAN_FRONTEND=noninteractive
+ENV GOOS=linux
+ENV GOARCH=${TARGETARCH}
 
-ARG BRANCH=v0.0.0
+# hadolint ignore=DL3008,DL4006
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    git \
+    gnupg \
+    pkg-config \
+    python3 \
+ && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+ && apt-get install -y --no-install-recommends \
+    nodejs \
+    golang \
+ && corepack enable \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN apk add --no-cache build-base git go yarn
-RUN git config --global advice.detachedHead false
+WORKDIR /build
+RUN git config --global advice.detachedHead false \
+ && git clone --depth 1 --branch "v${GRAFANA_VERSION}" https://github.com/grafana/grafana.git .
 
-RUN mkdir /usr/lib/go/src/github.com
-WORKDIR /usr/lib/go/src/github.com
-RUN git clone --branch $BRANCH --depth 1 https://github.com/grafana/grafana.git
-WORKDIR /usr/lib/go/src/github.com/grafana
+WORKDIR /build
+RUN corepack prepare yarn@1.22.22 --activate \
+ && yarn config set network-timeout 300000
 
+ENV NODE_ENV=production
+# hadolint ignore=DL3062
+RUN yarn install --frozen-lockfile --no-progress \
+ && yarn build \
+ && go run build.go build
 
-# https://yarnpkg.com/en/docs/cli/
-# Possible fix from https://github.com/yarnpkg/yarn/issues/8242
-RUN yarn config set network-timeout 300000
+# ══════════════════════════════════════════════════════════════
+# Stage 2: Runtime container
+# ══════════════════════════════════════════════════════════════
+FROM ${BASE_IMAGE} AS container
 
-RUN yarn install --verbose --pure-lockfile --har --no-progress
-ENV NODE_ENV production
-RUN yarn build
+ARG IMAGE_NAME=grafana
+ARG TARGETARCH
 
-RUN go mod verify
-RUN go run build.go build
+LABEL org.opencontainers.image.title="${IMAGE_NAME}"
+LABEL org.opencontainers.image.description="Grafana dashboard server built from source"
+LABEL org.opencontainers.image.source="https://github.com/gautada/grafana"
+LABEL org.opencontainers.image.license="Apache-2.0"
 
-# ----------------------------------------------------------- [STAGE] FINAL
-FROM alpine:$ALPINE_TAG
+ENV DEBIAN_FRONTEND=noninteractive
 
-COPY --from=config-alpine /etc/localtime /etc/localtime
-COPY --from=config-alpine /etc/timezone  /etc/timezone
+# hadolint ignore=DL3008
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    libfontconfig1 \
+    libfreetype6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 3000
+# Application layout
+RUN mkdir -p /usr/share/grafana \
+           /etc/grafana/provisioning \
+           /var/lib/grafana \
+           /var/log/grafana
 
-COPY config.ini /etc/grafana/config.ini
+# Grafana binaries and assets
+COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-server /usr/sbin/grafana-server
+COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-cli /usr/bin/grafana-cli
+COPY --from=builder /build/conf /usr/share/grafana/conf
+COPY --from=builder /build/public /usr/share/grafana/public
+COPY --from=builder /build/tools /usr/share/grafana/tools
+COPY --from=builder /build/plugins-bundled /usr/share/grafana/plugins-bundled
 
-RUN apk add --no-cache ca-certificates openssl musl-utils
+# Configuration
+COPY config.ini /etc/grafana/grafana.ini
+RUN chmod 0644 /etc/grafana/grafana.ini
 
-RUN mkdir -p /var/log/grafana \
-             /opt/grafana-data
-
-RUN chmod 777 /opt/grafana-data
-
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/bin/*/grafana-server /usr/lib/go/src/github.com/grafana/bin/*/grafana-cli /usr/bin
-
+# Runtime user
 ARG USER=grafana
-RUN addgroup $USER \
- && adduser -D -s /bin/sh -G $USER $USER \
- && echo "$USER:$USER" | chpasswd
-             
-RUN chown $USER:$USER -R /var/log/grafana
+RUN adduser --system --home /home/$USER --shell /bin/bash $USER \
+ && chown -R $USER:$USER /home/$USER /var/lib/grafana /var/log/grafana
 
-USER $USER
+ENV GRAFANA_PORT=3000
 
-WORKDIR /home/grafana
+# s6 service + health checks
+RUN mkdir -p /etc/services.d/grafana /etc/container/health.d
+COPY services/grafana/run /etc/services.d/grafana/run
+COPY health/grafana-check.sh /etc/container/health.d/grafana-running
+RUN chmod +x /etc/services.d/grafana/run /etc/container/health.d/grafana-running
 
-RUN ln -s /opt/grafana-data /home/grafana/lib
+# Version helper
+COPY scripts/container-version.sh /usr/bin/container-version
+RUN chmod +x /usr/bin/container-version
 
-RUN mkdir -p /home/grafana/lib/provisioning/datasources \
-             /home/grafana/lib/provisioning/plugins \
-             /home/grafana/lib/provisioning/notifiers \
-             /home/grafana/lib/provisioning/dashboards \
-             /home/grafana/lib/plugins
-             
+EXPOSE 3000/tcp
+WORKDIR /usr/share/grafana
 
-
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/conf ./conf
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/public ./public
-COPY --from=config-grafana /usr/lib/go/src/github.com/grafana/tools ./tools
-
-
-ENTRYPOINT ["/usr/bin/grafana-server"]
-CMD ["--config=/etc/grafana/config.ini", "--homepath=/home/grafana", "--packaging=container", "'$@'", "cfg:default.log.mode=console", "cfg:default.paths.data=/var/lib/grafana", "cfg:default.paths.logs=/var/log/grafana", "cfg:default.paths.plugins=/home/grafana/lib/plugins", "cfg:default.paths.provisioning=/home/grafana/lib/provisioning"]
+VOLUME ["/var/lib/grafana", "/var/log/grafana"]
 
