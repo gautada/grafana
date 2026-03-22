@@ -46,10 +46,11 @@ WORKDIR /build
 
 ENV NODE_ENV=production
 # hadolint ignore=DL3062
-RUN yarn install --frozen-lockfile
-RUN yarn build
+RUN yarn install --frozen-lockfile \
+ && yarn build \
 #  && go run build.go build
-RUN make build-go
+ && make build-go \
+ && yarn cache clean
 ENTRYPOINT ["tail", "-f", "/dev/null"]
 
 
