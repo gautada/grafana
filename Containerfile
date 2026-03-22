@@ -46,7 +46,7 @@ ENV NODE_ENV=production
 # hadolint ignore=DL3062
 RUN yarn install --frozen-lockfile --no-progress \
  && yarn build \
- && go run build.go build
+ && make build-go
 
 # ══════════════════════════════════════════════════════════════
 # Stage 2: Runtime container
