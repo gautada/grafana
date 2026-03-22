@@ -15,6 +15,8 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV GOOS=linux
 ENV GOARCH=${TARGETARCH}
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV NODE_OPTIONS=--max-old-space-size=6144
 
 # hadolint ignore=DL3008,DL4006
 RUN apt-get update \
@@ -44,10 +46,10 @@ WORKDIR /build
 
 ENV NODE_ENV=production
 # hadolint ignore=DL3062
-# RUN yarn install --frozen-lockfile --no-progress \
-#  && yarn build \
+RUN yarn install --frozen-lockfile
+RUN yarn build
 #  && go run build.go build
-
+RUN make build-go
 ENTRYPOINT ["tail", "-f", "/dev/null"]
 
 
