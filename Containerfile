@@ -15,6 +15,7 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV GOOS=linux
 ENV GOARCH=${TARGETARCH}
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 # hadolint ignore=DL3008,DL4006
 RUN apt-get update \
@@ -44,7 +45,7 @@ RUN corepack prepare yarn@1.22.22 --activate \
 
 ENV NODE_ENV=production
 # hadolint ignore=DL3062
-RUN yarn install --frozen-lockfile --no-progress \
+RUN yarn install --frozen-lockfile \
  && yarn build \
  && make build-go
 
