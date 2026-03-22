@@ -54,7 +54,7 @@ RUN yarn install --frozen-lockfile \
 # ENTRYPOINT ["tail", "-f", "/dev/null"]
 
 
-# FROM docker.io/gautada/debian:latest AS container
+FROM ${BASE_IMAGE} AS container
 
 # ╭――――――――――――――――――――╮
 # │ METADATA           │
