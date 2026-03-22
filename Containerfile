@@ -64,6 +64,36 @@ LABEL org.opencontainers.image.description="A Grafana dashboard server container
 LABEL org.opencontainers.image.source="https://github.com/gautada/grafana"
 LABEL org.opencontainers.image.license="Apache-2.0"
 
+ENV DEBIAN_FRONTEND=noninteractive
+
+# hadolint ignore=DL3008
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    libfontconfig1 \
+    libfreetype6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# Application layout
+RUN mkdir -p /usr/share/grafana \
+           /etc/grafana/provisioning \
+           /var/lib/grafana \
+           /var/log/grafana
+
+# Grafana binaries and assets
+COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-server /usr/sbin/grafana-server
+COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-cli /usr/bin/grafana-cli
+COPY --from=builder /build/conf /usr/share/grafana/conf
+COPY --from=builder /build/public /usr/share/grafana/public
+COPY --from=builder /build/tools /usr/share/grafana/tools
+COPY --from=builder /build/plugins-bundled /usr/share/grafana/plugins-bundled
+
 # ╭──────────────────────────────────────────────────────────╮
 # │ User                                                     │
 # ╰──────────────────────────────────────────────────────────╯
