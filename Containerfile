@@ -16,6 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV GOOS=linux
 ENV GOARCH=${TARGETARCH}
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV NODE_OPTIONS=--max-old-space-size=6144
 
 # hadolint ignore=DL3008,DL4006
 RUN apt-get update \
