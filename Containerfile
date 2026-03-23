@@ -56,6 +56,8 @@ RUN yarn install --frozen-lockfile \
 
 FROM ${BASE_IMAGE} AS container
 
+ARG TARGETARCH 
+
 # ╭――――――――――――――――――――╮
 # │ METADATA           │
 # ╰――――――――――――――――――――╯
