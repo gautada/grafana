@@ -89,8 +89,9 @@ RUN mkdir -p /usr/share/grafana \
            /var/log/grafana
 
 # Grafana binaries and assets
-COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-server /usr/sbin/grafana-server
+COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana /usr/bin/grafana
 COPY --from=builder /build/bin/linux-${TARGETARCH}/grafana-cli /usr/bin/grafana-cli
+RUN ln -sf /usr/bin/grafana /usr/sbin/grafana-server
 COPY --from=builder /build/conf /usr/share/grafana/conf
 COPY --from=builder /build/public /usr/share/grafana/public
 COPY --from=builder /build/tools /usr/share/grafana/tools

@@ -5,7 +5,7 @@
 # This script is an s6 service run script that launches and manages the
 # Grafana server within the container.
 
-APP_USER="grafana"
+APP_USER="dashboard"
 CONFIG_FILE="/etc/grafana/grafana.ini"
 HOME_PATH="/usr/share/grafana"
 DATA_PATH="/var/lib/grafana"
@@ -18,7 +18,7 @@ mkdir -p "${DATA_PATH}" "${LOG_PATH}" "${PLUGINS_PATH}"
 chown -R "${APP_USER}:${APP_USER}" "${DATA_PATH}" "${LOG_PATH}"
 
 exec s6-setuidgid "${APP_USER}" \
-  /usr/sbin/grafana-server \
+  /usr/bin/grafana server \
     --config="${CONFIG_FILE}" \
     --homepath="${HOME_PATH}" \
     --packaging=container \
