@@ -8,7 +8,7 @@ ARG TARGETARCH=amd64
 # Stage 1: Build Grafana from source
 # ══════════════════════════════════════════════════════════════
 # FROM ${BASE_IMAGE} AS builder
-FROM docker.io/library/golang:1.26.1-trixie AS builder
+FROM docker.io/library/golang:1.24-trixie AS builder
 
 ARG GRAFANA_VERSION
 ARG TARGETARCH
@@ -42,7 +42,7 @@ RUN git config --global advice.detachedHead false \
  && git clone --depth 1 --branch "v${GRAFANA_VERSION}" https://github.com/grafana/grafana.git .
 
 WORKDIR /build
-# RUN corepack prepare yarn@1.22.22 --activate \
+RUN corepack prepare yarn@1.22.22 --activate
 #  && yarn config set network-timeout 300000
 
 ENV NODE_ENV=production
