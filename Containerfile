@@ -116,8 +116,13 @@ RUN /usr/sbin/usermod -l $USER debian \
 # ╭――――――――――――――――――――╮
 # │ CONFIGURATION      │
 # ╰――――――――――――――――――――╯
-COPY config.ini /etc/grafana/grafana.ini
-RUN chown $USER:$USER /etc/grafana/grafana.ini
+# COPY config.ini /etc/grafana/grafana.ini
+COPY grafana.ini /mnt/volumes/configuration/grafana.ini
+RUN ln -fsv /mnt/volumes/configuration/grafana.ini /etc/grafana/grafana.ini \
+ && mkdir -p /etc/grafana/provisioning \
+ && ln -fsv /mnt/volumes/configuration/prometheus.yaml \
+            /etc/grafana/provisioning/prometheus.yaml \
+ && chown $USER:$USER /etc/grafana/grafana.ini
 
 # ╭――――――――――――――――――――╮
 # │ VERSION            │
@@ -136,6 +141,9 @@ RUN chmod +x /etc/container/health.d/grafana-running
 # ╰――――――――――――――――――――╯
 COPY services/grafana/run /etc/services.d/grafana/run
 RUN chmod +x /etc/services.d/grafana/run
+
+# hadolint ignore=DL3059
+RUN yarn cache clean
 
 EXPOSE 3000/tcp
 WORKDIR /
