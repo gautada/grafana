@@ -53,7 +53,7 @@ ENV NODE_ENV=production
 # hadolint ignore=DL3062
 RUN yarn install --frozen-lockfile \
  && yarn build \
-#  && go run build.go build
+ && ulimit -n 65536 \
  && make build-go \
  && yarn cache clean
 # ENTRYPOINT ["tail", "-f", "/dev/null"]
