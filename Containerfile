@@ -8,7 +8,7 @@ ARG TARGETARCH=amd64
 # Stage 1: Build Grafana from source
 # ══════════════════════════════════════════════════════════════
 # FROM ${BASE_IMAGE} AS builder
-FROM docker.io/library/golang:1.25-trixie AS builder
+FROM docker.io/library/golang:1.26.1-trixie AS builder
 
 ARG GRAFANA_VERSION
 ARG TARGETARCH
