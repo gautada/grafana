@@ -3,7 +3,7 @@
 # │ Grafana version reporter                                 │
 # ╰──────────────────────────────────────────────────────────╯
 
-VERSION=$(/usr/bin/grafana version 2>/dev/null | awk '{print $2}' | tr -d '\n')
+VERSION=$(/usr/bin/grafana-cli -v 2>/dev/null | awk '{print $2}' | tr -d '\n')
 
 if [ -z "${VERSION}" ]; then
   echo "unknown"
