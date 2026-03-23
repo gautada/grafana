@@ -3,6 +3,7 @@
 ARG BASE_IMAGE=docker.io/gautada/debian:latest
 ARG GRAFANA_VERSION=11.2.0
 ARG TARGETARCH=amd64
+ARG GOLANG_VERSION=1.22.4
 
 # ══════════════════════════════════════════════════════════════
 # Stage 1: Build Grafana from source
@@ -31,10 +32,18 @@ RUN apt-get update \
  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends \
     nodejs \
-    golang \
  && corepack enable \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
+
+# hadolint ignore=SC2086
+RUN curl -fsSL https://go.dev/dl/go${GOLANG_VERSION}.linux-${TARGETARCH}.tar.gz -o /tmp/go.tar.gz \
+ && tar -C /usr/local -xzf /tmp/go.tar.gz \
+ && ln -sf /usr/local/go/bin/go /usr/bin/go \
+ && ln -sf /usr/local/go/bin/gofmt /usr/bin/gofmt \
+ && rm /tmp/go.tar.gz
+
+ENV PATH=/usr/local/go/bin:$PATH
 
 WORKDIR /build
 RUN git config --global advice.detachedHead false \
