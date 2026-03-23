@@ -52,9 +52,11 @@ RUN corepack prepare yarn@1.22.22 --activate \
 ENV NODE_ENV=production
 # hadolint ignore=DL3062
 RUN yarn install --frozen-lockfile \
- && yarn build \
- && sh -ec 'ulimit -n; ulimit -n 65536; ulimit -n; make build-go' \
- && yarn cache clean
+ && yarn build
+# hadolint ignore=DL3059
+RUN sh -ec 'ulimit -n; ulimit -n 65536; ulimit -n; make build-go'
+# hadolint ignore=DL3059
+RUN yarn cache clean
 # ENTRYPOINT ["tail", "-f", "/dev/null"]
 
 
