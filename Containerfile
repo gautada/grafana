@@ -42,7 +42,11 @@ RUN git config --global advice.detachedHead false \
  && git clone --depth 1 --branch "v${GRAFANA_VERSION}" https://github.com/grafana/grafana.git .
 
 WORKDIR /build
-RUN corepack prepare yarn@1.22.22 --activate
+RUN corepack prepare yarn@1.22.22 --activate \
+ && go mod edit -replace=github.com/grafana/pyroscope-go/godeltaprof=github.com/grafana/pyroscope-go/godeltaprof@v0.1.9 \
+ && go mod tidy \
+ && go mod download \
+ && go list -m all | grep godeltaprof
 #  && yarn config set network-timeout 300000
 
 ENV NODE_ENV=production
