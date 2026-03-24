@@ -143,7 +143,7 @@ COPY services/grafana/run /etc/services.d/grafana/run
 RUN chmod +x /etc/services.d/grafana/run
 
 # hadolint ignore=DL3059
-RUN yarn cache clean
+# RUN yarn cache clean
 
 EXPOSE 3000/tcp
 WORKDIR /
